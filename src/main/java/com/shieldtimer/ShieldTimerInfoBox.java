@@ -10,15 +10,23 @@ import net.runelite.client.ui.overlay.infobox.InfoBoxPriority;
 
 public class ShieldTimerInfoBox extends InfoBox
 {
-	private final Instant endTime;
+	private Instant endTime;      // null = Ready state
+	private int charges = -1;     // -1 = unknown (never checked)
+	private boolean showCharges;  // mirrors per-shield config setting
 	private final int itemId;
 
-	public ShieldTimerInfoBox(BufferedImage image, Plugin plugin, int itemId, Instant endTime)
+	public ShieldTimerInfoBox(BufferedImage image, Plugin plugin, int itemId, boolean showCharges)
 	{
 		super(image, plugin);
-		this.itemId  = itemId;
-		this.endTime = endTime;
+		this.itemId      = itemId;
+		this.showCharges = showCharges;
+		this.endTime     = null;
 		setPriority(InfoBoxPriority.MED);
+	}
+
+	public void setEndTime(Instant endTime)
+	{
+		this.endTime = endTime;
 	}
 
 	public Instant getEndTime()
@@ -26,32 +34,70 @@ public class ShieldTimerInfoBox extends InfoBox
 		return endTime;
 	}
 
+	public void setCharges(int charges)
+	{
+		this.charges = charges;
+	}
+
+	public int getCharges()
+	{
+		return charges;
+	}
+
+	public void setShowCharges(boolean showCharges)
+	{
+		this.showCharges = showCharges;
+	}
+
+	public boolean isOnCooldown()
+	{
+		return endTime != null && !Duration.between(Instant.now(), endTime).isNegative();
+	}
+
 	@Override
 	public boolean render()
 	{
-		return !Duration.between(Instant.now(), endTime).isNegative();
+		return true;
 	}
 
 	@Override
 	public String getText()
 	{
-		Duration remaining = Duration.between(Instant.now(), endTime);
-
-		if (remaining.isNegative() || remaining.isZero())
+		if (endTime != null)
 		{
-			return "0:00";
+			Duration remaining = Duration.between(Instant.now(), endTime);
+			if (!remaining.isNegative() && !remaining.isZero())
+			{
+				long totalSeconds = remaining.getSeconds() + 1;
+				return String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60);
+			}
 		}
 
-		long totalSeconds = remaining.getSeconds() + 1;
-		return String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60);
+		if (showCharges && charges >= 0)
+		{
+			return String.valueOf(charges);
+		}
+
+		return "Ready";
 	}
 
 	@Override
 	public Color getTextColor()
 	{
+		if (charges >= 0 && charges < 5)
+		{
+			return Color.RED;
+		}
+
+		if (endTime == null)
+		{
+			return Color.GREEN;
+		}
+
 		Duration remaining = Duration.between(Instant.now(), endTime);
 		long seconds = remaining.getSeconds();
 
+		if (seconds <= 0)  return Color.GREEN;
 		if (seconds <= 10) return Color.RED;
 		if (seconds <= 30) return Color.YELLOW;
 		return Color.WHITE;
@@ -60,15 +106,24 @@ public class ShieldTimerInfoBox extends InfoBox
 	@Override
 	public String getTooltip()
 	{
-		Duration remaining = Duration.between(Instant.now(), endTime);
+		StringBuilder sb = new StringBuilder(getShieldName());
 
-		if (remaining.isNegative() || remaining.isZero())
+		if (endTime == null || Duration.between(Instant.now(), endTime).isNegative())
 		{
-			return getShieldName() + " — Ready!";
+			sb.append(" - Ready!");
+		}
+		else
+		{
+			long seconds = Duration.between(Instant.now(), endTime).getSeconds();
+			sb.append(String.format(" - ready in %d:%02d", seconds / 60, seconds % 60));
 		}
 
-		long seconds = remaining.getSeconds();
-		return String.format("%s — ready in %d:%02d", getShieldName(), seconds / 60, seconds % 60);
+		if (charges >= 0)
+		{
+			sb.append(" (").append(charges).append(" charges)");
+		}
+
+		return sb.toString();
 	}
 
 	private String getShieldName()
