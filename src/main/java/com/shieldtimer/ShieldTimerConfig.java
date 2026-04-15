@@ -1,6 +1,5 @@
 package com.shieldtimer;
 
-import java.awt.Color;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -148,53 +147,20 @@ public interface ShieldTimerConfig extends Config
     }
 
     // -------------------------------------------------------------------------
-    // Flash settings — global, applies to all tracked shields
-    // -------------------------------------------------------------------------
-    @ConfigSection(
-        name = "Flash Settings",
-        description = "Screen flash settings applied to all tracked shields",
-        position = 3
-    )
-    String flashSection = "flash";
-
-    @ConfigItem(
-        keyName = "flashOnReady",
-        name = "Flash when ready",
-        description = "Flash the screen when any tracked shield comes off cooldown",
-        section = flashSection,
-        position = 0
-    )
-    default boolean flashOnReady()
-    {
-        return true;
-    }
-
-    @ConfigItem(
-        keyName = "flashColor",
-        name = "Flash color",
-        description = "Color of the screen flash when a shield is ready",
-        section = flashSection,
-        position = 1
-    )
-    default Color flashColor()
-    {
-        return Color.CYAN;
-    }
-
-    // -------------------------------------------------------------------------
     // Projectile swaps — cosmetic only, local client only
     // -------------------------------------------------------------------------
     @ConfigSection(
         name = "Projectile Swaps",
         description = "Replace your shield spec projectiles with a different visual (cosmetic only)",
-        position = 4
+        position = 3
     )
     String swapSection = "swap";
 
     @ConfigItem(
         keyName = "dragonfireProjectile",
         name = "DFS / Ward projectile",
-        description = "Replace the Dragonfire Shield and Ward spec projectile with an alternative visual",
+        description = "Replace the Dragonfire Shield and Ward spec projectile with an alternative visual. "
+            + "Random picks a different one each time. Rainbow Cycle steps through a colour spectrum on each activation.",
         section = swapSection,
         position = 0
     )
@@ -206,7 +172,8 @@ public interface ShieldTimerConfig extends Config
     @ConfigItem(
         keyName = "awsProjectile",
         name = "Ancient Wyvern Shield projectile",
-        description = "Replace the Ancient Wyvern Shield spec projectile with an alternative visual",
+        description = "Replace the Ancient Wyvern Shield spec projectile with an alternative visual. "
+            + "Random picks a different one each time. Rainbow Cycle steps through a colour spectrum on each activation.",
         section = swapSection,
         position = 1
     )

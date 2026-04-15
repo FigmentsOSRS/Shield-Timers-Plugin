@@ -37,7 +37,6 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,15 +98,17 @@ public class ShieldTimerPlugin extends Plugin
 
 	@Inject private Client client;
 	@Inject private InfoBoxManager infoBoxManager;
-	@Inject private OverlayManager overlayManager;
 	@Inject private ItemManager itemManager;
 	@Inject private ConfigManager configManager;
 	@Inject private Notifier notifier;
 	@Inject private ShieldTimerConfig config;
-	@Inject private ShieldFlashOverlay flashOverlay;
 
 	private final Map<Integer, ShieldTimerInfoBox> shieldBoxes     = new HashMap<>();
 	private final Map<Integer, Instant>            activeCooldowns = new HashMap<>();
+
+	// Rainbow cycle state — each counter advances independently per shield group
+	private int dragonfireRainbowIdx = 0;
+	private int awsRainbowIdx        = 0;
 
 	private int pendingChargeShieldId = -1;
 	private int lastDfsVarbit         = 0;
@@ -116,8 +117,6 @@ public class ShieldTimerPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
-		overlayManager.add(flashOverlay);
-
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
 			lastDfsVarbit  = client.getVarbitValue(Varbits.DRAGONFIRE_SHIELD_COOLDOWN);
@@ -131,10 +130,11 @@ public class ShieldTimerPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
-		overlayManager.remove(flashOverlay);
 		removeAllBoxes();
 		activeCooldowns.clear();
 		clearSavedTimers();
+		dragonfireRainbowIdx  = 0;
+		awsRainbowIdx         = 0;
 		lastDfsVarbit         = 0;
 		lastWardVarbit        = 0;
 		pendingChargeShieldId = -1;
@@ -158,6 +158,8 @@ public class ShieldTimerPlugin extends Plugin
 				saveTimers();
 				removeAllBoxes();
 				activeCooldowns.clear();
+				dragonfireRainbowIdx  = 0;
+				awsRainbowIdx         = 0;
 				lastDfsVarbit         = 0;
 				lastWardVarbit        = 0;
 				pendingChargeShieldId = -1;
@@ -316,7 +318,7 @@ public class ShieldTimerPlugin extends Plugin
 		{
 			if (lastDfsVarbit == 0 && current > 0 && config.trackDfs())
 			{
-				log.debug("DFS activated — starting {}s timer", COOLDOWN_SECONDS);
+				log.debug("DFS activated - starting {}s timer", COOLDOWN_SECONDS);
 				startCooldown(DRAGONFIRE_SHIELD_CHARGED, COOLDOWN_SECONDS);
 			}
 			else if (current == 0 && lastDfsVarbit > 0)
@@ -329,7 +331,7 @@ public class ShieldTimerPlugin extends Plugin
 		{
 			if (lastWardVarbit == 0 && current > 0 && config.trackWard())
 			{
-				log.debug("Ward activated — starting {}s timer", COOLDOWN_SECONDS);
+				log.debug("Ward activated - starting {}s timer", COOLDOWN_SECONDS);
 				startCooldown(DRAGONFIRE_WARD_CHARGED, COOLDOWN_SECONDS);
 			}
 			else if (current == 0 && lastWardVarbit > 0)
@@ -372,7 +374,7 @@ public class ShieldTimerPlugin extends Plugin
 
 		if (id == PROJECTILE_AWS_FREEZE && config.trackAws())
 		{
-			log.debug("AWS projectile {} detected — starting {}s timer", PROJECTILE_AWS_FREEZE, COOLDOWN_SECONDS);
+			log.debug("AWS projectile {} detected - starting {}s timer", PROJECTILE_AWS_FREEZE, COOLDOWN_SECONDS);
 			startCooldown(ANCIENT_WYVERN_SHIELD, COOLDOWN_SECONDS);
 		}
 
@@ -380,7 +382,20 @@ public class ShieldTimerPlugin extends Plugin
 			? config.dragonfireProjectile()
 			: config.awsProjectile();
 
-		if (swap != ProjectileSwap.NONE)
+		if (swap == ProjectileSwap.RAINBOW)
+		{
+			int idx   = (id == PROJECTILE_DRAGONFIRE) ? dragonfireRainbowIdx++ : awsRainbowIdx++;
+			int newId = ProjectileSwap.RAINBOW_SEQUENCE[idx % ProjectileSwap.RAINBOW_SEQUENCE.length];
+			log.debug("Rainbow swap projectile {} -> {}", id, newId);
+			swapProjectile(projectile, newId);
+		}
+		else if (swap == ProjectileSwap.RANDOM)
+		{
+			ProjectileSwap pick = ProjectileSwap.random();
+			log.debug("Random swap projectile {} -> {} ({})", id, pick.getProjectileId(), pick);
+			swapProjectile(projectile, pick.getProjectileId());
+		}
+		else if (swap != ProjectileSwap.NONE)
 		{
 			log.debug("Swapping projectile {} -> {}", id, swap.getProjectileId());
 			swapProjectile(projectile, swap.getProjectileId());
@@ -510,11 +525,6 @@ public class ShieldTimerPlugin extends Plugin
 		if (box != null)
 		{
 			box.setEndTime(null);
-		}
-
-		if (config.flashOnReady())
-		{
-			flashOverlay.flash(itemId, config.flashColor());
 		}
 
 		if (trayNotifyFor(itemId))
